@@ -463,6 +463,7 @@ void ForStatement()
 		cout << "\tpush " << temp << endl;
         cout << "\tpop %rax" << endl;
         cout << "\taddq $1, %rax" << endl;
+		cout << "\tpush %rax" << endl;
         cout << "\tpop " << temp << endl;
 
 		cout << "\tjmp .L_FOR_COND_" << temp_val << endl;
