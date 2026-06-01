@@ -49,6 +49,16 @@ void Error(string s){
 	exit(-1);
 }
 
+void Letter(void)
+{
+	if (current >= 'a' && current <= 'z') {
+		cout << "\tpush " << current << endl;
+		ReadChar();
+	} else {
+		Error("Mauvaise entrez Nop");
+	}
+}
+
 // SimpleExpression := Term {AdditiveOperator Term}
 // Term := Digit | "(" SimpleExpression ")"
 // AdditiveOperator := "+" | "-"
@@ -57,6 +67,15 @@ void Error(string s){
 void AdditiveOperator(void){
 	if(current=='+'||current=='-')
 		ReadChar();
+	else if (current == '|') {
+		LookAhead();
+		if (lookedAhead == '|') {
+			ReadChar();
+			ReadChar();
+		} else {
+			Error("| mais pas de deuxieme |");
+		}
+	}
 	else
 		Error("Opérateur additif attendu");	   // Additive operator expected
 }
@@ -79,22 +98,81 @@ void Number(void){
 }
 
 void SimpleExpression(void);			// Called by Term() and calls Term()
-void Factor(void);
+void Factor();
+void MutliplicationEtOperation();
+void Expression();
 
-void Term(void){
-	if(current=='('){
+void Term(void)
+{
+	char temp;
+	Factor();
+
+	while (current == '*' || current == '/' || current == '%' || current == '&')
+	{
+		temp = current;
+		MutliplicationEtOperation();
+		Factor();
+
+		cout << "\tpop %rbx" << endl;
+        cout << "\tpop %rax" << endl;
+
+		if (temp == '*') {
+			cout << "\timulq %rbx, %rax" << endl;
+		} else if (temp == '/') {
+			cout << "\tcqto" << endl;
+            cout << "\tidivq %rbx" << endl;
+		} else if (temp == '%') {
+			cout << "\tcqto" << endl;
+            cout << "\tidivq %rbx" << endl;
+            cout << "\tmovq %rdx, %rax" << endl;
+		} else if (temp == '&') {
+			cout << "\tandq %rbx, %rax" << endl;
+		}
+
+		cout << "\tpush %rax" << endl;
+	}
+}
+
+void Factor()
+{
+	if (current == '(') {
 		ReadChar();
-		SimpleExpression();
-		if(current!=')')
-			Error("')' était attendu");		// ")" expected
+		Expression();
+		if (current != ')')
+			Error("Expression Invalide");
 		else
 			ReadChar();
+	} else if (current == '!') {
+		ReadChar();
+		Factor();
+
+		// on recupere, on inverse les bits, on remet
+		cout << "\tpop %rax" << endl;
+        cout << "\tnotq %rax" << endl;
+        cout << "\tpush %rax" << endl;
+	} else if (current >= 'a' && current <= 'z') {
+		Letter();
+	} else if (current >= '0' && current <= '9') {
+		Number();
+	} else {
+		Error("Nop invalide");
 	}
-	else 
-		if (current>='0' && current <='9')
-			Number();
-	     	else
-			Error("'(' ou chiffre attendu");
+}
+
+
+void MutliplicationEtOperation()
+{
+	if (current == '*' || current == '/' || current == '%')
+		ReadChar();
+	else if (current == '&') {
+		LookAhead();
+		if (lookedAhead == '&') {
+			ReadChar();
+			ReadChar();
+		} else
+			Error("& devrait etre suivit d'un deuxieme & mais la non donc error");
+	} else 
+		Error("Operateur attendu");
 }
 
 
@@ -106,7 +184,13 @@ void Expression(void)
 
 	switch (current) {
 		case '=':
-			ReadChar();
+			LookAhead();
+            if (lookedAhead == '=') {
+                ReadChar();
+            } else {
+                Error("'==' attendu");
+            }
+            ReadChar();
 			SimpleExpression();
 
 			cout << "\tpop %rbx"<<endl;	// get first operand
@@ -114,6 +198,7 @@ void Expression(void)
 			cout << "\tcmpq %rbx, %rax"<<endl;	// fait la comparaison
 			cout << "\tsete %al" <<endl;	// set if equal sur les 8bits
 			cout << "\tmovzbq %al, %rax" <<endl;	// balai sur les 64
+			cout << "\tnegq %rax" << endl;
 			cout << "\tpush %rax" << endl; // on met en haut de la pile
 
 			break;
@@ -123,9 +208,6 @@ void Expression(void)
 
 			if (lookedAhead == '=') {
 				instruction_set = "\tsetle %al"; // (Set if Less or Equal) : Inférieur ou égal (<=)
-				ReadChar();
-			} else if (lookedAhead == '>') {
-				instruction_set = "\tsetne %al"; //  (Set if Not Equal) : Met %al à 1 si les valeurs étaient différentes.
 				ReadChar();
 			} else {
 				instruction_set = "\tsetl %al"; // (Set if Less) : Strictement inférieur (<)
@@ -140,6 +222,7 @@ void Expression(void)
             cout << instruction_set << endl;
             
             cout << "\tmovzbq %al, %rax" << endl; // balai sur les 64
+			cout << "\tnegq %rax" << endl;
             cout << "\tpush %rax" << endl; // on met en haut de la pile
 			break;
 		case '>':
@@ -161,8 +244,28 @@ void Expression(void)
             cout << instruction_set << endl;
             
             cout << "\tmovzbq %al, %rax" << endl;
+			cout << "\tnegq %rax" << endl;
             cout << "\tpush %rax" << endl;
 			break;
+
+		case '!':
+            LookAhead();
+            if (lookedAhead == '=') {
+                ReadChar();
+            } else {
+                Error("'!=' attendu");
+            }
+            ReadChar();
+            SimpleExpression();
+
+            cout << "\tpop %rbx" << endl;
+            cout << "\tpop %rax" << endl;
+            cout << "\tcmpq %rbx, %rax" << endl;
+            cout << "\tsetne %al" << endl; // Set Not Equal
+            cout << "\tmovzbq %al, %rax" << endl;
+            cout << "\tnegq %rax" << endl;
+            cout << "\tpush %rax" << endl;
+            break;
 		default:
 			return;
 	}
@@ -172,50 +275,101 @@ void Expression(void)
 void SimpleExpression(void){
 	char adop;
 	Term();
-	while(current=='+'||current=='-'){
+	while(current=='+'||current=='-' || current=='|'){
 		adop=current;		// Save operator in local variable
 		AdditiveOperator();
 		Term();
 		cout << "\tpop %rbx"<<endl;	// get first operand
 		cout << "\tpop %rax"<<endl;	// get second operand
-		if(adop=='+')
+		if(adop == '+')
 			cout << "\taddq	%rbx, %rax"<<endl;	// add both operands
-		else
+		else if (adop == '-')
 			cout << "\tsubq	%rbx, %rax"<<endl;	// substract both operands
+		else if (adop == '|')
+			cout << "\torq %rbx, %rax" << endl; // OU logique bit-à-bit
 		cout << "\tpush %rax"<<endl;			// store result
 	}
 
 }
 
-void Factor(void){
+void DeclarerPartie()
+{
+	if (current == '[') {
+		cout << "\t.data" << endl;
+		ReadChar();
 
+		while (current != ']') {
+			if (current >= 'a' && current <= 'z') {
+				cout << current << ":\t.quad 0" << endl;
+				ReadChar();
+
+				if (current == ',')
+					ReadChar();
+			} else {
+				Error("Les var global doivent etre des lettres entre 'a' et 'z'");
+			}
+		}
+
+		ReadChar();
+	}
 }
+
+
+void Assignement()
+{
+    if (current >= 'a' && current <= 'z') {
+        char temp = current;
+        ReadChar();
+
+        if (current == '=') {
+            ReadChar();
+            Expression();
+            cout << "\tpop " << temp << endl;
+        } else {
+            Error("assigment incorrect");
+        }
+    } else {
+        Error("Une variable était attendue à gauche du '='");
+    }
+}
+
+
+void AssignementAvance()
+{
+	Assignement();
+
+	while(current == ';') {
+		ReadChar();
+		Assignement();
+	}
+
+	if (current != '.')
+		Error("Pas de . final !!!");
+}
+
+// ./compilateur < test.p > test.s && gcc -ggdb -no-pie -fno-pie test.s -o test
+// ./test && echo $?
 
 int main(void){	// First version : Source code on standard input and assembly code on standard output
 	// Header for gcc assembler / linker
 	cout << "\t\t\t# This code was produced by the CERI Compiler"<<endl;
-	cout << "\t.text\t\t# The following lines contain the program"<<endl;
-	cout << "\t.globl main\t# The main function must be visible from outside"<<endl;
-	cout << "main:\t\t\t# The main function body :"<<endl;
-	cout << "\tmovq %rsp, %rbp\t# Save the position of the stack's top"<<endl;
 
 	// Let's proceed to the analysis and code production
 	ReadChar();
-	Expression();
-	ReadChar();
-	// Trailer for the gcc assembler / linker
-	cout << "\tmovq %rbp, %rsp\t\t# Restore the position of the stack's top"<<endl;
-	cout << "\tret\t\t\t# Return from main function"<<endl;
-	if(cin.get(current)){
-		cerr <<"Caractères en trop à la fin du programme : ["<<current<<"]";
-		Error("."); // unexpected characters at the end of program
-	}
+
+    if (current == '[')
+		DeclarerPartie();
+
+	cout << "\t.text" << endl;
+    cout << "\t.globl main" << endl;
+    cout << "main:" << endl;
+    cout << "\tmovq %rsp, %rbp" << endl;
+
+	AssignementAvance();
+    
+	// fin
+    cout << "\tmovq %rbp, %rsp" << endl;
+    cout << "\tret" << endl;
+    return 0;
 
 }
-		
-			
-
-
-
-
-

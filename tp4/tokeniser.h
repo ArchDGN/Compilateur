@@ -1,0 +1,3 @@
+// tokeniser.h : shared definition for tokeniser.l and compilateur.cpp
+
+enum TOKEN {FEOF, UNKNOWN, NUMBER, ID, STRINGCONST, RBRACKET, LBRACKET, RPARENT, LPARENT, COMMA, SEMICOLON, DOT, ADDOP, MULOP, RELOP, NOT, ASSIGN, IF, THEN, ELSE, WHILE, DO, FOR, TO, BEGIN_TOK, END_TOK};
